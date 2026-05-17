@@ -5,9 +5,14 @@
  * Data is lost when the server restarts.
  */
 
-import { randomUUID } from 'crypto';
-import { ExamItem, CreateItemRequest, UpdateItemRequest, ListItemsQuery } from '../types/item.js';
-import { ItemStorage } from './interface.js';
+import { randomUUID } from "crypto";
+import {
+  ExamItem,
+  CreateItemRequest,
+  UpdateItemRequest,
+  ListItemsQuery,
+} from "../types/item.js";
+import { ItemStorage } from "./interface.js";
 
 export class MemoryStorage implements ItemStorage {
   private items: Map<string, ExamItem> = new Map();
@@ -36,17 +41,23 @@ export class MemoryStorage implements ItemStorage {
     return this.items.get(id) || null;
   }
 
-  async updateItem(id: string, data: UpdateItemRequest): Promise<ExamItem | null> {
+  async updateItem(
+    id: string,
+    data: UpdateItemRequest,
+  ): Promise<ExamItem | null> {
     const item = this.items.get(id);
     if (!item) return null;
 
     const updated: ExamItem = {
       ...item,
       ...data,
-      content: data.content ? { ...item.content, ...data.content } : item.content,
+      content: data.content
+        ? { ...item.content, ...data.content }
+        : item.content,
       metadata: {
         ...item.metadata,
         ...(data.metadata || {}),
+        created: item.metadata.created,
         lastModified: Date.now(),
         version: item.metadata.version + 1,
       },
@@ -62,17 +73,19 @@ export class MemoryStorage implements ItemStorage {
     return updated;
   }
 
-  async listItems(query: ListItemsQuery): Promise<{ items: ExamItem[]; total: number }> {
+  async listItems(
+    query: ListItemsQuery,
+  ): Promise<{ items: ExamItem[]; total: number }> {
     let items = Array.from(this.items.values());
 
     // Filter by subject
     if (query.subject) {
-      items = items.filter(item => item.subject === query.subject);
+      items = items.filter((item) => item.subject === query.subject);
     }
 
     // Filter by status
     if (query.status) {
-      items = items.filter(item => item.metadata.status === query.status);
+      items = items.filter((item) => item.metadata.status === query.status);
     }
 
     const total = items.length;
@@ -109,6 +122,14 @@ export class MemoryStorage implements ItemStorage {
   }
 
   async getAuditTrail(id: string): Promise<ExamItem[]> {
-    return this.versions.get(id) || [];
+    // Newest version first.
+    return (this.versions.get(id) || []).slice().reverse();
+  }
+
+  // Test-only: wipes all in-memory state. Not part of ItemStorage because
+  // production backends (DynamoDB) have no equivalent operation.
+  reset(): void {
+    this.items.clear();
+    this.versions.clear();
   }
 }

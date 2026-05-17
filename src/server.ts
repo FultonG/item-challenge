@@ -6,66 +6,108 @@
  */
 
 import { createServer, IncomingMessage, ServerResponse } from 'http';
-import { getItemHandler, createItemHandler } from './handlers/example.js';
+import { createItemHandler } from './handlers/createItem.js';
+import { getItemHandler } from './handlers/getItem.js';
+import { getAuditTrailHandler } from './handlers/getAuditTrail.js';
 
 const PORT = process.env.PORT || 3000;
 
-async function handleRequest(req: IncomingMessage, res: ServerResponse) {
-  const { method, url } = req;
+type HandlerResult = { statusCode: number; body: unknown };
 
-  // Parse request body
-  let body = '';
-  req.on('data', chunk => body += chunk);
-  await new Promise(resolve => req.on('end', resolve));
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let body = '';
+    req.on('data', (chunk) => (body += chunk));
+    req.on('end', () => resolve(body));
+    req.on('error', reject);
+  });
+}
+function write(res: ServerResponse, result: HandlerResult): void {
+  res.writeHead(result.statusCode, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(result.body));
+}
 
-  const parsedBody = body ? JSON.parse(body) : null;
+const notFound: HandlerResult = {
+  statusCode: 404,
+  body: { error: { code: 'ROUTE_NOT_FOUND', message: 'No route for this method/path' } },
+};
 
-  console.log(`${method} ${url}`);
+const invalidJson: HandlerResult = {
+  statusCode: 400,
+  body: { error: { code: 'INVALID_JSON', message: 'Request body is not valid JSON' } },
+};
 
-  // CORS headers
+async function route(req: IncomingMessage): Promise<HandlerResult> {
+  const url = new URL(req.url ?? '/', `http://localhost:${PORT}`);
+  const pathname = url.pathname;
+  const method = req.method ?? 'GET';
+
+  // POST /api/items
+  if (method === 'POST' && pathname === '/api/items') {
+    const raw = await readBody(req);
+    let body: unknown;
+    try { body = raw ? JSON.parse(raw) : null; } catch { return invalidJson; }
+    return createItemHandler(body);
+  }
+
+  // GET /api/items/:id/audit
+  const auditMatch = pathname.match(/^\/api\/items\/([^/]+)\/audit$/);
+  if (method === 'GET' && auditMatch) {
+    return getAuditTrailHandler({ id: decodeURIComponent(auditMatch[1]) });
+  }
+
+  // GET /api/items/:id
+  const idMatch = pathname.match(/^\/api\/items\/([^/]+)$/);
+  if (idMatch) {
+    const id = decodeURIComponent(idMatch[1]);
+    if (method === 'GET') return getItemHandler({ id });
+  }
+
+  return notFound;
+}
+
+async function handleRequest(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  // CORS — permissive for local dev
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-  if (method === 'OPTIONS') {
+  if (req.method === 'OPTIONS') {
     res.writeHead(204);
     res.end();
     return;
   }
 
+  console.log(`${req.method} ${req.url}`);
+
   try {
-    let result;
-
-    // Example routes - implement your own routing logic
-    if (method === 'GET' && url === '/api/items/test') {
-      result = await getItemHandler('test');
-    } else if (method === 'POST' && url === '/api/items') {
-      result = await createItemHandler(parsedBody);
-    } else if (method === 'GET' && url?.startsWith('/api/items/')) {
-      const id = url.split('/').pop();
-      result = await getItemHandler(id!);
-    } else {
-      result = {
-        statusCode: 404,
-        body: { error: 'Route not found' },
-      };
-    }
-
-    res.writeHead(result.statusCode, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify(result.body));
-  } catch (error) {
-    console.error('Server error:', error);
-    res.writeHead(500, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ error: 'Internal server error' }));
+    const result = await route(req);
+    write(res, result);
+  } catch (err) {
+    console.error('Unhandled server error:', err);
+    write(res, {
+      statusCode: 500,
+      body: { error: { code: 'INTERNAL_ERROR', message: 'Unhandled error' } },
+    });
   }
 }
 
-const server = createServer(handleRequest);
+const server = createServer((req, res) => {
+  handleRequest(req, res).catch((err) => {
+    console.error('Top-level error:', err);
+    write(res, {
+      statusCode: 500,
+      body: { error: { code: 'INTERNAL_ERROR', message: 'Top-level error' } },
+    });
+  });
+})
 
 server.listen(PORT, () => {
   console.log(`\n🚀 Server running at http://localhost:${PORT}`);
-  console.log(`\nExample endpoints:`);
-  console.log(`  POST   http://localhost:${PORT}/api/items`);
-  console.log(`  GET    http://localhost:${PORT}/api/items/:id`);
+  console.log(`\n Endpoints:`);
+  console.log('Routes:');
+  console.log('  POST   /api/items');
+  console.log('  GET    /api/items/:id');
+  console.log('  GET    /api/items/:id/audit');
   console.log(`\nPress Ctrl+C to stop\n`);
 });

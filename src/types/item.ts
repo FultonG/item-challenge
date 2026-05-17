@@ -53,7 +53,14 @@ export interface UpdateItemRequest {
 
 export interface ListItemsQuery {
   limit?: number;
-  offset?: number;
+  offset?: number;     // Used by MemoryStorage only; DynamoDB uses opaque token.
   subject?: string;
   status?: string;
+  nextToken?: string;  // Opaque, base64url-encoded LastEvaluatedKey (DynamoDB only).
+}
+
+export interface ListItemsResult {
+  items: ExamItem[];
+  total?: number;      // Total is best-effort; DynamoDB pagination doesn't carry a total.
+  nextToken?: string;  // Present when more items exist; pass back as `nextToken` to page.
 }

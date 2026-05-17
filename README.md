@@ -1,5 +1,20 @@
 # Item Challenge
 
+> **Submission notes** — this fork is the completed take-home. See
+> [ARCHITECTURE.md](./ARCHITECTURE.md) for design decisions and a
+> "What Was Implemented" inventory.
+>
+> Quick run:
+>
+> ```bash
+> pnpm install
+> pnpm test                                  # 15 tests across 6 files
+> pnpm dev                                   # http://localhost:3000
+>
+> cd infrastructure && pnpm install
+> npx cdk synth -c stage=dev                 # or stage=prod
+> ```
+
 Welcome! This is a take-home coding assignment for a software engineering position. In this challenge, you'll be building a simplified version of an exam item management API with cloud infrastructure.
 
 Once you're ready to get started, read through [GETTING_STARTED.md](GETTING_STARTED.md).

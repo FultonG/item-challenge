@@ -1,0 +1,22 @@
+{
+  "app": "npx ts-node --prefer-ts-exts bin/app.ts",
+  "context": {
+    "stages": {
+      "dev": {
+        "logRetentionDays": 30,
+        "pointInTimeRecovery": false,
+        "deletionProtection": false,
+        "removalPolicy": "destroy",
+        "apiThrottle": { "rateLimit": 50, "burstLimit": 100 },
+        "analytics": false
+      },
+      "prod": {
+        "logRetentionDays": 180,
+        "pointInTimeRecovery": true,
+        "deletionProtection": true,
+        "removalPolicy": "retain",
+        "apiThrottle": { "rateLimit": 200, "burstLimit": 400 }
+      }
+    }
+  }
+}
